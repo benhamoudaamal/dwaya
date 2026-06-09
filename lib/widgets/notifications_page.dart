@@ -15,7 +15,7 @@ class NotificationsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(collectionName == "notifications"
+        title: Text(collectionName == "family_notifications"
             ? "🔔 Alertes famille"
             : "🔔 Notifications"),
       ),
@@ -23,7 +23,6 @@ class NotificationsPage extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection(collectionName)
             .where("patientId", isEqualTo: patientId)
-            //.orderBy("date", descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
@@ -45,6 +44,10 @@ class NotificationsPage extends StatelessWidget {
             itemBuilder: (context, index) {
               final n = docs[index];
               final data = n.data();
+              final title = data["title"] ?? "Notification";
+              final subtitle = data.containsKey("message")
+                  ? data["message"]
+                  : (data.containsKey("body") ? data["body"] : "");
 
               return Card(
                 margin: const EdgeInsets.all(10),
@@ -54,12 +57,10 @@ class NotificationsPage extends StatelessWidget {
                     color: Colors.blue,
                   ),
                   title: Text(
-                    n["title"],
+                    title,
                   ),
                   subtitle: Text(
-                    data.containsKey("message")
-                        ? data["message"]
-                        : (data.containsKey("body") ? data["body"] : ""),
+                    subtitle,
                   ),
                   trailing: IconButton(
                     icon: const Icon(

@@ -320,126 +320,107 @@ class _PatientsPageState extends State<PatientsPage> {
   }
 
   Future<void> scheduleMedNotification(
-    Map<String, dynamic> med,
-    int ordre,
-  ) async {
-    try {
-      final time = med["time"];
+  Map<String, dynamic> med,
+  int ordre,
+) async {
+  try {
+    final time = med["time"];
+    if (time == null) return;
 
-      if (time == null) return;
+    final parts = time.split(":");
+    final hour = int.parse(parts[0]);
+    final minute = int.parse(parts[1]);
 
-      final parts = time.split(":");
+    final now = DateTime.now();
 
-      final hour = int.parse(parts[0]);
-      final minute = int.parse(parts[1]);
+    DateTime scheduled = DateTime(
+      now.year, now.month, now.day, hour, minute,
+    );
 
-      final now = DateTime.now();
-
-      DateTime scheduled = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        hour,
-        minute,
-      );
-
-      if (scheduled.isBefore(now.subtract(
-        const Duration(seconds: 30),
-      ))) {
-        return;
-      }
-      print("NOTIFICATION SCHEDULED = $scheduled");
-
-      await notificationsPlugin.zonedSchedule(
-        med["id"].hashCode,
-        "💊 Heure du médicament",
-        "${med["name"]} - ${med["quantite"]} - ${med["moment"]}",
-        tz.TZDateTime.local(
-          scheduled.year,
-          scheduled.month,
-          scheduled.day,
-          scheduled.hour,
-          scheduled.minute,
-        ),
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'med_channel',
-            'Médicaments',
-            importance: Importance.max,
-            priority: Priority.high,
-            playSound: true,
-            enableVibration: true,
-            ticker: 'Médicament',
-            fullScreenIntent: true,
-            visibility: NotificationVisibility.public,
-            category: AndroidNotificationCategory.alarm,
-          ),
-        ),
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      );
-
-      // 🔊 VOICE
-      // 🔊 VOICE
-      Future.delayed(
-        scheduled.difference(now),
-        () async {
-          String message = "حان الآن أخذ الدواء رقم $ordre "
-              "${med["name"]} "
-              "واسمه ${med["name"]} "
-              "نوع الدواء ${med["type"]} "
-              "الجرعة ${med["quantite"]} "
-              "يؤخذ ${med["moment"]}";
-
-          await flutterTts.setLanguage("ar");
-
-          await flutterTts.setSpeechRate(0.30);
-
-          await flutterTts.setPitch(1);
-
-          // ❤️ 3 مرات
-          for (int repeat = 0; repeat < 3; repeat++) {
-            // ❤️ يبدأ blinking
-            setState(() {
-              activeMedId = med["id"];
-            });
-
-            // ❤️ blinking
-
-            flutterTts.speak(message);
-
-            for (int i = 0; i < 12; i++) {
-              await Future.delayed(
-                const Duration(milliseconds: 500),
-              );
-
-              setState(() {
-                blink = !blink;
-              });
-            }
-
-            // ❤️ الصوت
-            await flutterTts.speak(message);
-
-            // ❤️ يوقف blinking
-            setState(() {
-              activeMedId = "";
-            });
-
-            // ❤️ يستنى دقيقة
-            if (repeat < 2) {
-              await Future.delayed(
-                const Duration(minutes: 1),
-              );
-            }
-          }
-        },
-      );
-    } catch (e) {
-      print("NOTIFICATION ERROR = $e");
+    if (scheduled.isBefore(now.subtract(const Duration(seconds: 30)))) {
+      return;
     }
+
+    print("NOTIFICATION SCHEDULED = $scheduled");
+
+    // ✅ Notification système
+    await notificationsPlugin.zonedSchedule(
+      med["id"].hashCode,
+      "💊 Heure du médicament",
+      "${med["name"]} - ${med["quantite"]} - ${med["moment"]}",
+      tz.TZDateTime.local(
+        scheduled.year, scheduled.month, scheduled.day,
+        scheduled.hour, scheduled.minute,
+      ),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'med_channel', 'Médicaments',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          ticker: 'Médicament',
+          fullScreenIntent: true,
+          visibility: NotificationVisibility.public,
+          category: AndroidNotificationCategory.alarm,
+        ),
+      ),
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    );
+
+    // ✅ Alerte vocale
+    Future.delayed(scheduled.difference(now), () async {
+      if (!mounted) return;
+
+      final String message =
+          "حان الآن موعد أخذ الدواء رقم $ordre. "
+          "اسم الدواء ${med["name"]}. "
+          "نوع الدواء ${med["type"]}. "
+          "الجرعة ${med["quantite"]}. "
+          "يؤخذ ${med["moment"]}.";
+
+      await flutterTts.setLanguage("ar-SA");
+      await flutterTts.setSpeechRate(0.35);
+      await flutterTts.setPitch(1.0);
+      await flutterTts.setVolume(1.0);
+      // ✅ PAS de awaitSpeakCompletion ici
+
+      for (int repeat = 0; repeat < 3; repeat++) {
+        if (!mounted) return;
+
+        setState(() {
+          activeMedId = med["id"];
+          blink = true;
+        });
+
+        // ✅ Speak et blink en parallèle
+        flutterTts.speak(message); // sans await
+
+        // ✅ Blink pendant ~8 secondes (durée du message)
+        for (int i = 0; i < 16; i++) {
+          if (!mounted) return;
+          await Future.delayed(const Duration(milliseconds: 500));
+          setState(() { blink = !blink; });
+        }
+
+        if (!mounted) return;
+        setState(() {
+          activeMedId = "";
+          blink = false; // ✅ reset propre
+        });
+
+        if (repeat < 2) {
+          await Future.delayed(const Duration(seconds: 30));
+        }
+      }
+    });
+
+  } catch (e) {
+    print("NOTIFICATION ERROR = $e");
   }
+}
 
   Future<void> sendSOS() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -1079,7 +1060,7 @@ class _PatientsPageState extends State<PatientsPage> {
             BoxShadow(
               color: Colors.black12,
               blurRadius: 18,
-              offset: Offset(0, 8),
+              offset: Offset(0, 10),
             ),
           ],
         ),
