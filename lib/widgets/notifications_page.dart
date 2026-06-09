@@ -15,7 +15,7 @@ class NotificationsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(collectionName == "family_notifications"
+        title: Text(collectionName == "notifications"
             ? "🔔 Alertes famille"
             : "🔔 Notifications"),
       ),
@@ -44,7 +44,7 @@ class NotificationsPage extends StatelessWidget {
             itemCount: docs.length,
             itemBuilder: (context, index) {
               final n = docs[index];
-              final data = n.data() as Map<String, dynamic>;
+              final data = n.data();
 
               return Card(
                 margin: const EdgeInsets.all(10),
