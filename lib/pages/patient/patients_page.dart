@@ -279,6 +279,14 @@ class _PatientsPageState extends State<PatientsPage> {
     super.initState();
     initNotifications();
     loadTomorrowRdv();
+    // Dans initState(), après initNotifications()
+Future.delayed(const Duration(seconds: 3), () async {
+  await flutterTts.setLanguage("ar-SA");
+  await flutterTts.setVolume(1.0);
+  await flutterTts.setSpeechRate(0.35);
+  flutterTts.speak("حان الآن موعد أخذ الدواء الأول. اسم الدواء باراسيتامول. نوع الدواء قرص. الجرعة 500 ملغ. يؤخذ صباحا.");
+});
+
 
     print("INIT STATE CALLED");
 
@@ -327,9 +335,27 @@ class _PatientsPageState extends State<PatientsPage> {
     final time = med["time"];
     if (time == null) return;
 
-    final parts = time.split(":");
-    final hour = int.parse(parts[0]);
-    final minute = int.parse(parts[1]);
+    // ✅ Nettoyer le time
+    final cleanTime = time.toString().trim()
+        .replaceAll("O", "0")
+        .replaceAll("o", "0");
+
+    print("TIME ORIGINAL = $time");
+    print("TIME CLEAN = $cleanTime");
+
+    final parts = cleanTime.split(":");
+    if (parts.length < 2) {
+      print("TIME FORMAT INVALIDE = $cleanTime");
+      return;
+    }
+
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+
+    if (hour == null || minute == null) {
+      print("PARSE FAILED = $cleanTime");
+      return;
+    }
 
     final now = DateTime.now();
 
@@ -338,6 +364,7 @@ class _PatientsPageState extends State<PatientsPage> {
     );
 
     if (scheduled.isBefore(now.subtract(const Duration(seconds: 30)))) {
+      print("PASSÉ = $scheduled");
       return;
     }
 
@@ -371,8 +398,15 @@ class _PatientsPageState extends State<PatientsPage> {
     );
 
     // ✅ Alerte vocale
-    Future.delayed(scheduled.difference(now), () async {
+    final difference = scheduled.difference(now);
+    final safeDelay = difference.isNegative ? Duration.zero : difference;
+
+    print("DELAY = $safeDelay");
+
+    Future.delayed(safeDelay, () async {
       if (!mounted) return;
+
+      print("🔊 TTS DÉCLENCHÉ");
 
       final String message =
           "حان الآن موعد أخذ الدواء رقم $ordre. "
@@ -385,7 +419,6 @@ class _PatientsPageState extends State<PatientsPage> {
       await flutterTts.setSpeechRate(0.35);
       await flutterTts.setPitch(1.0);
       await flutterTts.setVolume(1.0);
-      // ✅ PAS de awaitSpeakCompletion ici
 
       for (int repeat = 0; repeat < 3; repeat++) {
         if (!mounted) return;
@@ -396,9 +429,8 @@ class _PatientsPageState extends State<PatientsPage> {
         });
 
         // ✅ Speak et blink en parallèle
-        flutterTts.speak(message); // sans await
+        flutterTts.speak(message);
 
-        // ✅ Blink pendant ~8 secondes (durée du message)
         for (int i = 0; i < 16; i++) {
           if (!mounted) return;
           await Future.delayed(const Duration(milliseconds: 500));
@@ -408,7 +440,7 @@ class _PatientsPageState extends State<PatientsPage> {
         if (!mounted) return;
         setState(() {
           activeMedId = "";
-          blink = false; // ✅ reset propre
+          blink = false;
         });
 
         if (repeat < 2) {
@@ -421,7 +453,6 @@ class _PatientsPageState extends State<PatientsPage> {
     print("NOTIFICATION ERROR = $e");
   }
 }
-
   Future<void> sendSOS() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
